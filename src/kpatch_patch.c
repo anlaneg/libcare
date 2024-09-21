@@ -487,7 +487,7 @@ unpatch:
 	return -1;
 }
 
-int process_patch(int pid, void *_data)
+int process_patch(int pid/*进程id*/, void *_data)
 {
 	int ret;
 	kpatch_process_t _proc, *proc = &_proc;

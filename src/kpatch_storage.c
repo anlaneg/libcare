@@ -33,6 +33,7 @@ patch_file_verify(struct kp_file *kpfile)
 	kpdebug("Verifying patch for '%s'...", k->modulename);
 
 	if (memcmp(k->magic, KPATCH_FILE_MAGIC1, sizeof(k->magic))) {
+		/*magic检查失败*/
 		kperr("'%s' patch is invalid: Invalid magic.\n",
 		      k->modulename);
 		return -1;
@@ -66,6 +67,7 @@ int storage_init(kpatch_storage_t *storage,
 			goto out_err;
 
 		if (fstat(patch_fd, &stat) < 0)
+			/*取文件对应的stat*/
 			goto out_close;
 	}
 
@@ -82,6 +84,7 @@ int storage_init(kpatch_storage_t *storage,
 		if (ret < 0)
 			goto out_close;
 
+		/*校验patch_file*/
 		ret = patch_file_verify(&storage->patch.kpfile);
 		if (ret < 0) {
 			kpatch_close_file(&storage->patch.kpfile);

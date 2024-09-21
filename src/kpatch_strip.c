@@ -23,6 +23,7 @@
 #define MODE_REL_FIXUP 4
 #define MODE_UNDO_LINK 5
 
+/*是否需要此name*/
 int need_section(char *name)
 {
 	if (strstr(name, "kpatch"))
@@ -36,14 +37,16 @@ int need_section(char *name)
 	return 0;
 }
 
-Elf *kpatch_open_elf(char *file, int create)
+Elf *kpatch_open_elf(char *file, int create/*是否创建*/)
 {
 	int fd;
 	Elf *elf;
 
+	/*打开file*/
 	fd = open(file, O_RDWR | (create ? O_CREAT : 0), 0660);
 	if (fd == -1)
 		kpfatalerror("open");
+	/*创建对应的elf*/
 	elf = elf_begin(fd, (create ? ELF_C_WRITE : ELF_C_RDWR), NULL);
 	if (!elf)
 		kpfatalerror("elf_begin");
@@ -95,7 +98,7 @@ static size_t process_kpatch_info(Elf_Scn *scnout, GElf_Shdr *hdr)
 	return KPATCH_INFO_LAST_SIZE;
 }
 
-static int kpatch_strip(Elf *elfin, Elf *elfout)
+static int kpatch_strip(Elf *elfin/*入elf*/, Elf *elfout/*出out*/)
 {
 	GElf_Ehdr ehin, ehout;
 	Elf_Scn *scnin = NULL, *scnout = NULL;
@@ -131,6 +134,7 @@ static int kpatch_strip(Elf *elfin, Elf *elfout)
 			kpfatalerror("gelf_getshdr out");
 		if (!gelf_getshdr(scnin, &shin))
 			kpfatalerror("gelf_getshdr in");
+		/*取此section名称*/
 		scnname = elf_strptr(elfin, shstridx, shin.sh_name);
 		shout = shin;
 
@@ -142,6 +146,7 @@ static int kpatch_strip(Elf *elfin, Elf *elfout)
 
 		kpinfo("processing '%s'...", scnname);
 		if (need_section(scnname)) {
+			/*需要此section*/
 			kpinfo("need it\n");
 			dataout = elf_newdata(scnout);
 			if (!dataout)
@@ -947,12 +952,14 @@ struct option long_opts[] = {
 
 #define SET_MODE(newmode)	do {					\
 	if (mode) {							\
+		/*mode被重复设置，报错*/\
 		kperr("ERROR: Multiple actions specified\n");		\
 		return usage();						\
 	}								\
 	mode = newmode;				\
 } while (0);
 
+/*kpatch_strip入口*/
 int main(int argc, char *argv[])
 {
 	Elf *elf1 = NULL, *elf2 = NULL;
@@ -961,6 +968,7 @@ int main(int argc, char *argv[])
 	while ((ch = getopt_long(argc, argv, "+o:sru", long_opts, 0)) != -1) {
 		switch (ch) {
 		case 's':
+			/*--strip选项，更新为MODE_STRIP*/
 			SET_MODE(MODE_STRIP);
 			break;
 		case 'r':
@@ -974,6 +982,7 @@ int main(int argc, char *argv[])
 		}
 	}
 	if (!mode)
+		/*没有设置mode*/
 		return usage();
 
 	argc -= optind;
@@ -985,6 +994,7 @@ int main(int argc, char *argv[])
 	case MODE_REL_FIXUP:
 	case MODE_UNDO_LINK:
 		if (argc != 2)
+			/*以上mode必须有2个参数*/
 			return usage();
 		break;
 	default:
@@ -993,13 +1003,17 @@ int main(int argc, char *argv[])
 
 	elf_version(EV_CURRENT);
 
+	/*打开第一个elf*/
 	elf1 = kpatch_open_elf(argv[0], 0);
 	if (argc == 2)
+		/*打开第二个elf*/
 		elf2 = kpatch_open_elf(argv[1], (mode == MODE_STRIP));
 
 	if (mode == MODE_STRIP)
+		/*处理strip模式*/
 		return kpatch_strip(elf1, elf2);
 	if (mode == MODE_REL_FIXUP)
+		/*处理rel_fixup模式*/
 		return kpatch_rel_fixup(elf1, elf2);
 	if (mode == MODE_UNDO_LINK)
 		return kpatch_undo_link(elf1, elf2);

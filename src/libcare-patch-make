@@ -23,9 +23,11 @@ EOF
 
 
 prepare_env() {
+    #程序所在路径
 	KPATCH_PATH=$(dirname $0)
 
 	if test ! -x "$KPATCH_PATH/kpatch_gensrc"; then
+	   #kpatch_gensrc必须存在
 		echo "kpatch tools are missing" >&2
 		exit 1
 	fi
@@ -36,6 +38,8 @@ prepare_env() {
 
 	MAKE_OUTPUT=/dev/stdout
 
+    #如果存在lpmakefile文件，则将LPMAKEFILE设置为-f lpmakefile，这样
+    #在后续在make $LPMAKEFILE中就同时支持有lpmakefile与没有lpmakefile情况了
 	LPMAKEFILE=""
 	test -f lpmakefile && LPMAKEFILE="-f lpmakefile"
 
@@ -44,11 +48,13 @@ prepare_env() {
 	LPMAKE_PATCHROOT="${LPMAKE_PATCHROOT-$PWD/patchroot}"
 
 	export LPMAKE_ORIGINAL_DIR LPMAKE_PATCHED_DIR LPMAKE_PATCHROOT
+	#创建这三个目录
 	mkdir -p "$LPMAKE_ORIGINAL_DIR" "$LPMAKE_PATCHED_DIR" "$LPMAKE_PATCHROOT"
 
 	unset MAKELEVEL
 	unset MAKEFLAGS
 
+    #取以下颜色输出代码
 	red=$(tput setaf 1)
 	green=$(tput setaf 2)
 	reset=$(tput sgr0)
@@ -73,6 +79,7 @@ build_objects() {
 	restore_origs
 
 	if test -n "$do_clean"; then
+	    #需要先做clean,先执行clean target
 		make $LPMAKEFILE clean >$MAKE_OUTPUT 2>&1
 		rm -rf "$LPMAKE_ORIGINAL_DIR" "$LPMAKE_PATCHED_DIR"
 	fi
@@ -80,25 +87,30 @@ build_objects() {
 	export KPATCH_STAGE=original
 	export KPCC_DBGFILTER_ARGS=""
 
+    #执行编译,执行首个target
 	echo "${green}BUILDING ORIGINAL CODE${reset}"
 	make $LPMAKEFILE >$MAKE_OUTPUT 2>&1
 
+    #执行安装target,并指定destdir安装到LPMAKE_ORIGINAL_DIR
 	echo "${green}INSTALLING ORIGINAL OBJECTS INTO $LPMAKE_ORIGINAL_DIR${reset}"
 	make $LPMAKEFILE install				\
 		"$destdir=$LPMAKE_ORIGINAL_DIR"			\
 		>$MAKE_OUTPUT 2>&1
 
+    #如果有指定srcdir,则进入到srcdir目录
 	local oldpwd="$(pwd)"
 	if test -n "$srcdir"; then
 		cd "$srcdir"
 	fi
 
+    #遍历$@,应用其指定的patch文件备份原文件
 	i=0
 	for patch; do
 		echo "${red}applying $patch...${reset}"
 		patch -b -z .${i}.lpmakeorig -p1 < $patch
 	done
 
+    #打补丁完成，回归到原目录
 	if test -n "$srcdir"; then
 		cd "$oldpwd"
 	fi
@@ -106,9 +118,11 @@ build_objects() {
 	export KPATCH_STAGE=patched
 	export KPCC_APPEND_ARGS="-Wl,-q"
 
+    #已打补丁，再运行编译
 	echo "${green}BUILDING PATCHED CODE${reset}"
 	make $LPMAKEFILE >$MAKE_OUTPUT 2>&1
 
+    #安装到patched目录
 	echo "${green}INSTALLING PATCHED OBJECTS INTO $LPMAKE_PATCHED_DIR${reset}"
 	make $LPMAKEFILE install				\
 		"$destdir=$LPMAKE_PATCHED_DIR"			\
@@ -125,6 +139,7 @@ build_kpatches() {
 		filename="${origexec##*$LPMAKE_ORIGINAL_DIR/}"
 		patchedexec="$LPMAKE_PATCHED_DIR/$filename"
 
+        #提取exec中存放的build id
 		buildid=$(eu-readelf -n "$origexec" | sed -n '/Build ID:/ { s/.* //; p }')
 		if ! eu-readelf -S "$patchedexec" | grep -q '.kpatch'; then
 			continue
@@ -132,13 +147,18 @@ build_kpatches() {
 
 		test -n "$buildid" || continue
 
+        #准备修改，先添加写权限
 		chmod u+w "${origexec}" "${patchedexec}"
+		#执行strip模式
 		$KPATCH_PATH/kpatch_strip --strip "${patchedexec}" \
 			"${patchedexec}.stripped" >/dev/null
+		#执行rel-fixup模式
 		$KPATCH_PATH/kpatch_strip --rel-fixup "$origexec" \
 			"${patchedexec}.stripped" || continue
 		/usr/bin/strip --strip-unneeded "${patchedexec}.stripped"
+		#执行undo-link模式
 		$KPATCH_PATH/kpatch_strip --undo-link "$origexec" "${patchedexec}.stripped"
+		#将stripped文件合并成kpatch file，并存入LPMAKE_PATCHROOT
 		$KPATCH_PATH/kpatch_make -b "$buildid" \
 			"${patchedexec}.stripped" -o "${patchedexec}.kpatch"
 		cp "${patchedexec}.kpatch" "${LPMAKE_PATCHROOT}"/${buildid}.kpatch
@@ -147,11 +167,13 @@ build_kpatches() {
 }
 
 main() {
+    #取程序名称
 	PROG_NAME=$(basename $0)
 
 	TEMP=$(getopt -o s:ucd --long srcdir:,update,clean,destdir: -n ${PROG_NAME} -- "$@" || usage 1)
 	eval set -- "$TEMP"
 
+    #指明安装目录变量名
 	destdir="DESTDIR"
 	while true; do
 		case $1 in
@@ -182,6 +204,7 @@ main() {
 	prepare_env
 
 	if test -z "$only_update"; then
+	    #未指定-u选项，构建objects
 		build_objects "$@"
 	fi
 	build_kpatches

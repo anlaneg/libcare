@@ -104,6 +104,7 @@ int cmd_patch_user(int argc, char *argv[])
 			return usage_patch(NULL);
 		case 'p':
 			if (strcmp(optarg, "all"))
+				/*转换为int,获取pid*/
 				pid = atoi(optarg);
 			is_pid_set = 1;
 			break;
@@ -872,6 +873,7 @@ processes_do(int pid, callback_t callback, void *data)
 	char *tmp, buf[64];
 
 	if (pid != -1)
+		/*未指定pid处理*/
 		return callback(pid, data);
 
 	dir = opendir("/proc");
@@ -880,17 +882,21 @@ processes_do(int pid, callback_t callback, void *data)
 		return -1;
 	}
 
+	/*遍历/proc中文件*/
 	while ((de = readdir(dir))) {
 		if (de->d_name[0] == '.')
+			/*跳过以'.'开头的文件*/
 			continue;
 
 		pid = strtoul(de->d_name, &tmp, 10);
 		if (pid == 0 || *tmp != '\0')
+			/*遇到非数字文件*/
 			continue;
 
 		if (pid == 1 || pid == getpid())
 			continue;
 
+		/*读取此进程对应可执行文件路径*/
 		snprintf(buf, sizeof(buf), "/proc/%d/exe", pid);
 		rv = readlink(buf, buf, sizeof(buf));
 		if (rv == -1) {
@@ -902,6 +908,7 @@ processes_do(int pid, callback_t callback, void *data)
 			continue;
 		}
 
+		/*调用callback*/
 		rv = callback(pid, data);
 		if (rv < 0)
 			ret = -1;
@@ -936,10 +943,11 @@ static int usage(const char *err)
 static int
 execute_cmd(int argc, char *argv[])
 {
-	char *cmd = argv[0];
+	char *cmd = argv[0];/**/
 	optind = 1;
 
 	if (!strcmp(cmd, "patch") || !strcmp(cmd, "patch-user"))
+		/*执行patch命令*/
 		return cmd_patch_user(argc, argv);
 	else if (!strcmp(cmd, "unpatch") || !strcmp(cmd, "unpatch-user"))
 		return cmd_unpatch_user(argc, argv);
@@ -949,6 +957,7 @@ execute_cmd(int argc, char *argv[])
 		return usage("unknown command");
 }
 
+/*libcare-ctl程序入口*/
 /* entry point */
 int main(int argc, char *argv[])
 {
@@ -966,6 +975,7 @@ int main(int argc, char *argv[])
 		}
 	}
 
+	/*将-v参数后面的值设置为argv[0]*/
 	argc -= optind;
 	argv += optind;
 
@@ -976,9 +986,11 @@ int main(int argc, char *argv[])
 	return cmd_server(argc, argv);
 #else
 	if (argc < 1)
+		/*参数过少*/
 		return usage("not enough arguments.");
 
 	if (!strcmp(argv[0], "server"))
+		/*如果cmd是server，则执行cmd_server*/
 		return cmd_server(argc, argv);
 	else
 		return execute_cmd(argc, argv);

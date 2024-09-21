@@ -26,13 +26,14 @@ static void xerror(const char *fmt, ...)
 	exit(1);
 }
 
-int make_file(int fdo, void *buf1, off_t size, const char *buildid)
+int make_file(int fdo/*输出文件fd*/, void *buf1/*输入文件内容*/, off_t size/*输入内容内存长度*/, const char *buildid)
 {
 	int res;
 	struct kpatch_file khdr;
 
 	memset(&khdr, 0, sizeof(khdr));
 
+	/*初始化kpatch_file结构体*/
 	memcpy(khdr.magic, KPATCH_FILE_MAGIC1, sizeof(khdr.magic));
 	strncpy(khdr.uname, buildid, sizeof(khdr.uname));
 	khdr.build_time = (uint64_t)time(NULL);
@@ -44,9 +45,12 @@ int make_file(int fdo, void *buf1, off_t size, const char *buildid)
 	size = ALIGN(size, 16);
 	khdr.total_size = khdr.kpatch_offset + size;
 
+	/*写kpatch_file结构体到输出文件*/
 	res = write(fdo, &khdr, sizeof(khdr));
+	/*写输入内容到输出文件中*/
 	res += write(fdo, buf1, size);
 
+	/*校验输出长度*/
 	if (res != sizeof(khdr) + size)
 		xerror("write error");
 
@@ -65,6 +69,7 @@ static void usage(void)
 	exit(EXIT_FAILURE);
 }
 
+/*kpatch_make入口,用于生成kpatch file*/
 int main(int argc, char **argv)
 {
 	int opt;
@@ -90,13 +95,16 @@ int main(int argc, char **argv)
 	}
 
 	if (buildid == NULL)
+		/*buildid必须指定*/
 		usage();
 
 	fd1 = open(argv[optind], O_RDONLY);
 	if (fd1 == -1)
 		xerror("Can't open 1st input file '%s'", argv[optind]);
 	if (fstat(fd1, &st) == -1)
+		/*取文件大小*/
 		xerror("Can't stat file1");
+	/*将文件映射到内存*/
 	buf = mmap(NULL, st.st_size, PROT_READ|PROT_WRITE, MAP_PRIVATE, fd1, 0);
 	if (buf == MAP_FAILED)
 		xerror("mmap error %d", errno);
@@ -104,6 +112,7 @@ int main(int argc, char **argv)
 
 	fdo = 1;
 	if (outputname) {
+		/*打开输出文件*/
 		fdo = open(outputname, O_CREAT | O_TRUNC | O_WRONLY, 0660);
 		if (fdo == -1)
 			xerror("Can't open output file '%s'", outputname);

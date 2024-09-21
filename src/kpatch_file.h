@@ -112,6 +112,7 @@ struct kpatch_payload {
 };
 
 struct kpatch_file {
+	/*magic字符串*/
 	char magic[8];			/* magic string */
 	unsigned char flags;
 	unsigned char safety_method;
